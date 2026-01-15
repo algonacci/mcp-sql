@@ -7,7 +7,7 @@ import pandas as pd
 # Create the MCP server
 mcp = FastMCP(
     "SQL Explorer", 
-    dependencies=["sqlalchemy", "pandas", "pymysql", "psycopg2-binary"]
+    dependencies=["sqlalchemy", "pandas", "pymysql", "psycopg2-binary", "pyodbc", "oracledb"]
 )
 
 # Dictionary to store connections for reuse
@@ -36,10 +36,12 @@ def connect_database(
         ctx.info(f"Attempting to connect to database: {masked_connection}")
         
         # Check if connection string has the right format
-        if not (connection_string.startswith('mysql+') or 
-                connection_string.startswith('postgresql+') or
-                connection_string.startswith('mysql://') or 
-                connection_string.startswith('postgresql://')):
+        if not (connection_string.startswith('mysql') or 
+                connection_string.startswith('postgresql') or
+                connection_string.startswith('postgres') or
+                connection_string.startswith('sqlite') or
+                connection_string.startswith('mssql') or
+                connection_string.startswith('oracle')):
             
             # Try to auto-correct the connection string if possible
             if "mysql" in connection_string.lower():
@@ -52,18 +54,32 @@ def connect_database(
                     connection_string = connection_string.replace('postgresql://', 'postgresql+psycopg2://')
                     if not connection_string.startswith('postgresql+'):
                         connection_string = 'postgresql+psycopg2://' + connection_string
-            else:
-                return {
-                    "success": False,
-                    "error": "Unsupported database type. Please use MySQL or PostgreSQL connection strings."
-                }
+            # Simple pass-through for others or common alias corrections could go here
+            elif "sqlite" in connection_string.lower() and not connection_string.startswith("sqlite"):
+                 connection_string = "sqlite:///" + connection_string # fallback helper, maybe risky
+            
+            # If still not matching known prefixes (strict check removed for flexibility, but let's keep basic validation)
+            if not any(connection_string.startswith(p) for p in ['mysql', 'postgres', 'sqlite', 'mssql', 'oracle']):
+                 # We'll try to let SQLAlchemy handle it, but warn/inform
+                 ctx.info("Connection string doesn't match common prefixes (mysql, postgresql, sqlite, mssql, oracle). Attempting anyway...")
         
         # Create engine and connect
         engine = create_engine(connection_string)
         connection = engine.connect()
         
         # Determine database type
-        db_type = "MySQL" if "mysql" in connection_string.lower() else "PostgreSQL"
+        if "mysql" in connection_string.lower():
+            db_type = "MySQL"
+        elif "postgre" in connection_string.lower():
+            db_type = "PostgreSQL"
+        elif "sqlite" in connection_string.lower():
+            db_type = "SQLite"
+        elif "mssql" in connection_string.lower():
+            db_type = "SQL Server"
+        elif "oracle" in connection_string.lower():
+            db_type = "Oracle"
+        else:
+            db_type = "Unknown URL"
         
         # Get database inspector
         inspector = inspect(engine)
@@ -413,6 +429,9 @@ Please use the database connection tool to establish a connection and then show 
 Please provide the connection string in one of these formats:
 - MySQL: "mysql+pymysql://user:password@host:port/database"
 - PostgreSQL: "postgresql+psycopg2://user:password@host:port/database"
+- SQLite: "sqlite:///path/to/database.db" (use 4 slashes for absolute paths: sqlite:////absolute/path/db.db)
+- SQL Server: "mssql+pyodbc://user:password@dsn_name" or with driver params
+- Oracle: "oracle+oracledb://user:password@host:port/service_name"
 
 I'll help you explore the database schema and run queries.
 """

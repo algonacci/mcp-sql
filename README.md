@@ -1,6 +1,6 @@
 # mcp-sql
 
-MCP server to give client the ability to access SQL databases (MySQL and PostgreSQL supported)
+MCP server to give client the ability to access SQL databases (MySQL, PostgreSQL, SQLite, SQL Server, and Oracle supported)
 
 # Usage
 
